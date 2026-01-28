@@ -222,3 +222,23 @@ async def get_uploaded_files(session: AsyncSession, file_ids: list[int]) -> list
         return []
     result = await session.execute(select(UploadedFile).where(UploadedFile.id.in_(file_ids)))
     return list(result.scalars().all())
+
+
+async def append_question_message_id(session: AsyncSession, response_id: int, message_id: int) -> None:
+    response = await session.get(Response, response_id)
+    if not response:
+        return
+    current = list(response.question_message_ids or [])
+    current.append(message_id)
+    response.question_message_ids = current
+    await session.commit()
+
+
+async def append_user_message_id(session: AsyncSession, response_id: int, message_id: int) -> None:
+    response = await session.get(Response, response_id)
+    if not response:
+        return
+    current = list(response.user_message_ids or [])
+    current.append(message_id)
+    response.user_message_ids = current
+    await session.commit()

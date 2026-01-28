@@ -90,6 +90,8 @@ class Response(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     current_question_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    question_message_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
+    user_message_ids: Mapped[list[int]] = mapped_column(JSON, default=list)
 
     user: Mapped[User] = relationship("User", back_populates="responses")
     answers: Mapped[list[Answer]] = relationship(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from html import escape as html_escape
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.keyboards import (
@@ -13,19 +14,24 @@ from app.bot.keyboards import (
     format_question_text,
 )
 from app.db import AsyncSessionLocal
-from app.models import Question
+from app.models import Question, Response, Survey
 from app.services.files import download_telegram_file
 from app.services.sheets_stub import send_to_google_sheets_stub
 from app.services.survey import (
     abandon_active_responses,
     advance_response,
     append_file_answer,
+    append_question_message_id,
+    append_user_message_id,
     get_active_response,
     get_active_survey,
     get_answer,
+    get_options_map,
     get_or_create_user,
     get_question,
     get_questions,
+    get_response_answers,
+    get_uploaded_files,
     save_option_answer,
     save_text_answer,
     toggle_option_answer,
@@ -123,7 +129,8 @@ async def handle_callbacks(callback: CallbackQuery) -> None:
             option_id = int(action.replace("opt", ""))
             if question.type == "single_choice":
                 await save_option_answer(session, response.id, question.id, [option_id])
-                await callback.message.edit_reply_markup(reply_markup=None)
+                answer_text = _format_option_values(question, [option_id])
+                await _edit_callback_message(callback, question, answer_text)
                 next_question = await advance_response(session, response)
                 await callback.answer("Принято")
                 if next_question:
@@ -141,8 +148,10 @@ async def handle_callbacks(callback: CallbackQuery) -> None:
                 return
 
         if action == "done" and question.type == "multi_choice":
+            answer = await get_answer(session, response.id, question.id)
+            answer_text = _format_option_values(question, answer.option_values if answer else [])
+            await _edit_callback_message(callback, question, answer_text)
             next_question = await advance_response(session, response)
-            await callback.message.edit_reply_markup(reply_markup=None)
             await callback.answer("Дальше")
             if next_question:
                 await send_question(callback.message.bot, callback.message.chat.id, next_question, session, response.id)
@@ -155,8 +164,10 @@ async def handle_callbacks(callback: CallbackQuery) -> None:
             if not answer or not answer.file_ids:
                 await callback.answer("Сначала отправьте файл.", show_alert=True)
                 return
+            files = await get_uploaded_files(session, answer.file_ids)
+            answer_text = _format_file_list(files)
+            await _edit_callback_message(callback, question, answer_text)
             next_question = await advance_response(session, response)
-            await callback.message.edit_reply_markup(reply_markup=None)
             await callback.answer("Файлы приняты")
             if next_question:
                 await send_question(callback.message.bot, callback.message.chat.id, next_question, session, response.id)
@@ -185,12 +196,20 @@ async def handle_messages(message: Message) -> None:
             await message.answer("Нажмите /start чтобы начать анкету.")
             return
         question = await get_question(session, response.current_question_id)
+        await append_user_message_id(session, response.id, message.message_id)
 
         if question.type == "text":
             if not message.text:
                 await message.answer("Пожалуйста, отправьте текстовый ответ.")
                 return
             await save_text_answer(session, response.id, question.id, message.text.strip())
+            await _edit_last_question_message(
+                message.bot,
+                message.chat.id,
+                response,
+                question,
+                message.text.strip(),
+            )
             next_question = await advance_response(session, response)
             if next_question:
                 await send_question(message.bot, message.chat.id, next_question, session, response.id)
@@ -215,10 +234,9 @@ async def handle_messages(message: Message) -> None:
 
             await update_user_phone(session, user.id, phone)
             await save_text_answer(session, response.id, question.id, phone)
+            await _edit_last_question_message(message.bot, message.chat.id, response, question, phone)
             next_question = await advance_response(session, response)
             if next_question:
-                if next_question.type != "contact":
-                    await message.answer("Спасибо!", reply_markup=ReplyKeyboardRemove())
                 await send_question(message.bot, message.chat.id, next_question, session, response.id)
             else:
                 await finish_response(message, session, response.id)
@@ -230,7 +248,16 @@ async def handle_messages(message: Message) -> None:
                 return
             uploaded = await download_telegram_file(message.bot, session, response.id, question.id, message)
             await append_file_answer(session, response.id, question.id, uploaded.id)
-            await message.answer("Файл получен. Можно отправить ещё или нажать 'Завершить загрузку'.")
+            answer = await get_answer(session, response.id, question.id)
+            files = await get_uploaded_files(session, answer.file_ids if answer else [])
+            await _edit_last_question_message(
+                message.bot,
+                message.chat.id,
+                response,
+                question,
+                _format_file_list(files),
+                keep_file_keyboard=True,
+            )
             return
 
         await message.answer("Используйте кнопки под вопросом.")
@@ -238,20 +265,26 @@ async def handle_messages(message: Message) -> None:
 
 async def send_question(
     bot: Bot, chat_id: int, question: Question, session: AsyncSession, response_id: int | None
-) -> None:
+) -> Message | None:
     text = format_question_text(question)
 
     if question.type == "text":
-        await bot.send_message(chat_id, text, reply_markup=ReplyKeyboardRemove())
-        return
+        sent = await bot.send_message(chat_id, text, reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+        if response_id is not None:
+            await append_question_message_id(session, response_id, sent.message_id)
+        return sent
 
     if question.type == "contact":
-        await bot.send_message(chat_id, text, reply_markup=build_contact_keyboard())
-        return
+        sent = await bot.send_message(chat_id, text, reply_markup=build_contact_keyboard(), parse_mode="HTML")
+        if response_id is not None:
+            await append_question_message_id(session, response_id, sent.message_id)
+        return sent
 
     if question.type == "single_choice":
-        await bot.send_message(chat_id, text, reply_markup=build_single_choice_keyboard(question.id, question.options))
-        return
+        sent = await bot.send_message(chat_id, text, reply_markup=build_single_choice_keyboard(question.id, question.options), parse_mode="HTML")
+        if response_id is not None:
+            await append_question_message_id(session, response_id, sent.message_id)
+        return sent
 
     if question.type == "multi_choice":
         answer = None
@@ -259,17 +292,131 @@ async def send_question(
             answer = await get_answer(session, response_id, question.id)
         selected = set(answer.option_values or []) if answer else set()
         keyboard = build_multi_choice_keyboard(question.id, question.options, selected)
-        await bot.send_message(chat_id, text, reply_markup=keyboard)
-        return
+        sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+        if response_id is not None:
+            await append_question_message_id(session, response_id, sent.message_id)
+        return sent
 
     if question.type == "file":
-        await bot.send_message(chat_id, text, reply_markup=build_file_keyboard(question.id))
-        return
+        sent = await bot.send_message(chat_id, text, reply_markup=build_file_keyboard(question.id), parse_mode="HTML")
+        if response_id is not None:
+            await append_question_message_id(session, response_id, sent.message_id)
+        return sent
 
 
 async def finish_response(message: Message, session: AsyncSession, response_id: int) -> None:
     await send_to_google_sheets_stub(session, response_id)
-    await message.answer("Спасибо! Анкета завершена.", reply_markup=ReplyKeyboardRemove())
+    summary = await _build_summary(session, response_id)
+    response = await session.get(Response, response_id)
+    if response:
+        await _delete_messages(
+            message.bot,
+            message.chat.id,
+            list(response.question_message_ids or []) + list(response.user_message_ids or []),
+        )
+    await message.answer(summary, reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+
+
+def _render_answered_question(question: Question, answer_text: str) -> str:
+    return f"{question.text}\n\n{answer_text}"
+
+
+def _format_option_values(question: Question, option_ids: list[int]) -> str:
+    if not option_ids:
+        return "—"
+    option_map = {opt.id: opt.text for opt in question.options}
+    values = [option_map.get(opt_id, str(opt_id)) for opt_id in option_ids]
+    return "\n".join([f"• {value}" for value in values if value])
+
+
+def _format_file_list(files: list) -> str:
+    if not files:
+        return "Файлы не получены."
+    lines = []
+    for file in files:
+        lines.append(file.public_url or file.file_name)
+    return "\n".join(lines)
+
+
+async def _edit_callback_message(callback: CallbackQuery, question: Question, answer_text: str) -> None:
+    try:
+        await callback.message.edit_text(_render_answered_question(question, answer_text), reply_markup=None)
+    except Exception:
+        return
+
+
+async def _edit_last_question_message(
+    bot: Bot,
+    chat_id: int,
+    response: Response,
+    question: Question,
+    answer_text: str,
+    keep_file_keyboard: bool = False,
+) -> None:
+    message_ids = list(response.question_message_ids or [])
+    if not message_ids:
+        return
+    message_id = message_ids[-1]
+    reply_markup = build_file_keyboard(question.id) if keep_file_keyboard else None
+    try:
+        await bot.edit_message_text(
+            _render_answered_question(question, answer_text),
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=reply_markup,
+        )
+    except Exception:
+        return
+
+
+async def _build_summary(session: AsyncSession, response_id: int) -> str:
+    response = await session.get(Response, response_id)
+    if not response:
+        return "Спасибо! Анкета завершена."
+    survey = await session.get(Survey, response.survey_id)
+    questions = await get_questions(session, response.survey_id)
+    answers = await get_response_answers(session, response.id)
+    answers_map = {answer.question_id: answer for answer in answers}
+    options_map = await get_options_map(session, [q.id for q in questions])
+
+    title_raw = f"Сводка анкеты: {survey.title}" if survey else "Сводка анкеты"
+    lines = [html_escape(title_raw)]
+    for question in questions:
+        answer = answers_map.get(question.id)
+        value = await _format_answer_value(session, question, answer, options_map)
+        q_text = html_escape(question.text)
+        a_text = html_escape(value)
+        lines.append(f"<b>{q_text}</b>\n{a_text}")
+
+    return "\n\n".join(lines)
+
+
+async def _format_answer_value(
+    session: AsyncSession,
+    question: Question,
+    answer,
+    options_map: dict[int, dict[int, str]],
+) -> str:
+    if not answer:
+        return "—"
+    if answer.text_value:
+        return answer.text_value
+    if answer.option_values:
+        texts = [options_map.get(question.id, {}).get(opt_id, str(opt_id)) for opt_id in answer.option_values]
+        values = [t for t in texts if t]
+        return "\n".join([f"• {value}" for value in values]) or "—"
+    if answer.file_ids:
+        files = await get_uploaded_files(session, answer.file_ids)
+        return _format_file_list(files)
+    return "—"
+
+
+async def _delete_messages(bot: Bot, chat_id: int, message_ids: list[int]) -> None:
+    for message_id in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            continue
 
 
 def _parse_callback(data: str) -> tuple[int | None, str]:
