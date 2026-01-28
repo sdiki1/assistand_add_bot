@@ -3,7 +3,7 @@
 <div class="card">
     <h2>Редактирование вопроса</h2>
     <p class="muted">ID {{ question.id }}</p>
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         <label>Текст вопроса</label>
         <textarea name="text">{{ question.text }}</textarea>
 
@@ -28,6 +28,18 @@
 
         <label>Подсказка (необязательно)</label>
         <textarea name="help_text">{{ question.help_text or "" }}</textarea>
+
+        <h3>Фото вопроса</h3>
+        {% if question.image_path %}
+            <div style="margin-bottom: 12px;">
+                <img src="/admin/question-image/{{ question.id }}?token={{ token }}" alt="question image" style="max-width: 320px; border-radius: 8px; border: 1px solid #e5e7eb;" />
+            </div>
+            <label class="inline">
+                <input type="checkbox" name="remove_image" /> Удалить фото
+            </label>
+        {% endif %}
+        <input type="file" name="image" accept="image/*" />
+        <p class="muted">JPEG/PNG/WebP, рекомендуется до 1–2 МБ.</p>
 
         <label class="inline">
             <input type="checkbox" name="required" {% if question.required %}checked{% endif %} /> Обязательный

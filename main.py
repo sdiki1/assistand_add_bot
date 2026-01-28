@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
 from app.bot.handlers import register_handlers
-from app.config import FILES_DIR, settings
+from app.config import FILES_DIR, QUESTION_IMAGES_DIR, settings
 from app.db import AsyncSessionLocal, init_db
 from app.models import UploadedFile
 from app.seed import seed_if_empty
@@ -23,6 +23,7 @@ register_handlers(dp)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     FILES_DIR.mkdir(parents=True, exist_ok=True)
+    QUESTION_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     await init_db()
     async with AsyncSessionLocal() as session:
         await seed_if_empty(session)

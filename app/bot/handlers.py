@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram.types import CallbackQuery, FSInputFile, Message, ReplyKeyboardRemove
 from html import escape as html_escape
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -267,21 +269,54 @@ async def send_question(
     bot: Bot, chat_id: int, question: Question, session: AsyncSession, response_id: int | None
 ) -> Message | None:
     text = format_question_text(question)
+    has_image = _has_question_image(question)
 
     if question.type == "text":
-        sent = await bot.send_message(chat_id, text, reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+        if has_image:
+            sent = await bot.send_photo(
+                chat_id,
+                FSInputFile(question.image_path),
+                caption=text,
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode="HTML",
+            )
+        else:
+            sent = await bot.send_message(chat_id, text, reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
         if response_id is not None:
             await append_question_message_id(session, response_id, sent.message_id)
         return sent
 
     if question.type == "contact":
-        sent = await bot.send_message(chat_id, text, reply_markup=build_contact_keyboard(), parse_mode="HTML")
+        if has_image:
+            sent = await bot.send_photo(
+                chat_id,
+                FSInputFile(question.image_path),
+                caption=text,
+                reply_markup=build_contact_keyboard(),
+                parse_mode="HTML",
+            )
+        else:
+            sent = await bot.send_message(chat_id, text, reply_markup=build_contact_keyboard(), parse_mode="HTML")
         if response_id is not None:
             await append_question_message_id(session, response_id, sent.message_id)
         return sent
 
     if question.type == "single_choice":
-        sent = await bot.send_message(chat_id, text, reply_markup=build_single_choice_keyboard(question.id, question.options), parse_mode="HTML")
+        if has_image:
+            sent = await bot.send_photo(
+                chat_id,
+                FSInputFile(question.image_path),
+                caption=text,
+                reply_markup=build_single_choice_keyboard(question.id, question.options),
+                parse_mode="HTML",
+            )
+        else:
+            sent = await bot.send_message(
+                chat_id,
+                text,
+                reply_markup=build_single_choice_keyboard(question.id, question.options),
+                parse_mode="HTML",
+            )
         if response_id is not None:
             await append_question_message_id(session, response_id, sent.message_id)
         return sent
@@ -292,13 +327,31 @@ async def send_question(
             answer = await get_answer(session, response_id, question.id)
         selected = set(answer.option_values or []) if answer else set()
         keyboard = build_multi_choice_keyboard(question.id, question.options, selected)
-        sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
+        if has_image:
+            sent = await bot.send_photo(
+                chat_id,
+                FSInputFile(question.image_path),
+                caption=text,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        else:
+            sent = await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="HTML")
         if response_id is not None:
             await append_question_message_id(session, response_id, sent.message_id)
         return sent
 
     if question.type == "file":
-        sent = await bot.send_message(chat_id, text, reply_markup=build_file_keyboard(question.id), parse_mode="HTML")
+        if has_image:
+            sent = await bot.send_photo(
+                chat_id,
+                FSInputFile(question.image_path),
+                caption=text,
+                reply_markup=build_file_keyboard(question.id),
+                parse_mode="HTML",
+            )
+        else:
+            sent = await bot.send_message(chat_id, text, reply_markup=build_file_keyboard(question.id), parse_mode="HTML")
         if response_id is not None:
             await append_question_message_id(session, response_id, sent.message_id)
         return sent
@@ -340,7 +393,14 @@ def _format_file_list(files: list) -> str:
 
 async def _edit_callback_message(callback: CallbackQuery, question: Question, answer_text: str) -> None:
     try:
-        await callback.message.edit_text(_render_answered_question(question, answer_text), reply_markup=None)
+        if callback.message.photo:
+            await callback.message.edit_caption(
+                caption=_render_answered_question(question, answer_text), reply_markup=None
+            )
+        else:
+            await callback.message.edit_text(
+                _render_answered_question(question, answer_text), reply_markup=None
+            )
     except Exception:
         return
 
@@ -359,14 +419,26 @@ async def _edit_last_question_message(
     message_id = message_ids[-1]
     reply_markup = build_file_keyboard(question.id) if keep_file_keyboard else None
     try:
-        await bot.edit_message_text(
-            _render_answered_question(question, answer_text),
-            chat_id=chat_id,
-            message_id=message_id,
-            reply_markup=reply_markup,
-        )
+        if _has_question_image(question):
+            await bot.edit_message_caption(
+                caption=_render_answered_question(question, answer_text),
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=reply_markup,
+            )
+        else:
+            await bot.edit_message_text(
+                _render_answered_question(question, answer_text),
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=reply_markup,
+            )
     except Exception:
         return
+
+
+def _has_question_image(question: Question) -> bool:
+    return bool(question.image_path and os.path.exists(question.image_path))
 
 
 async def _build_summary(session: AsyncSession, response_id: int) -> str:

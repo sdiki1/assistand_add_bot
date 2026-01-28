@@ -41,6 +41,9 @@ class Question(Base):
     allow_multiple: Mapped[bool] = mapped_column(Boolean, default=False)
     help_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    image_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    image_mime: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     survey: Mapped[Survey] = relationship("Survey", back_populates="questions")
     options: Mapped[list[Option]] = relationship(
