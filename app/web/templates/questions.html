@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Вопросы анкеты: {{ survey.title }}</h2>
+    <p class="muted">Редактируйте текст, типы и варианты ответа.</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Порядок</th>
+                <th>Код</th>
+                <th>Тип</th>
+                <th>Текст</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for q in questions %}
+            <tr>
+                <td>{{ q.order }}</td>
+                <td>{{ q.code }}</td>
+                <td>{{ q.type }}</td>
+                <td>{{ q.text }}</td>
+                <td><a href="/admin/questions/{{ q.id }}?token={{ token }}">Редактировать</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

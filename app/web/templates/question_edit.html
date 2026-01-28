@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Редактирование вопроса</h2>
+    <p class="muted">ID {{ question.id }}</p>
+    <form method="post">
+        <label>Текст вопроса</label>
+        <textarea name="text">{{ question.text }}</textarea>
+
+        <div class="row">
+            <div>
+                <label>Код (slug)</label>
+                <input type="text" name="code" value="{{ question.code }}" />
+            </div>
+            <div>
+                <label>Тип</label>
+                <select name="type">
+                    {% for t in ["text", "contact", "single_choice", "multi_choice", "file"] %}
+                        <option value="{{ t }}" {% if question.type == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Порядок</label>
+                <input type="number" name="order" value="{{ question.order }}" />
+            </div>
+        </div>
+
+        <label>Подсказка (необязательно)</label>
+        <textarea name="help_text">{{ question.help_text or "" }}</textarea>
+
+        <label class="inline">
+            <input type="checkbox" name="required" {% if question.required %}checked{% endif %} /> Обязательный
+        </label>
+        <label class="inline">
+            <input type="checkbox" name="allow_multiple" {% if question.allow_multiple %}checked{% endif %} /> Множественный выбор
+        </label>
+
+        <h3>Варианты ответов</h3>
+        <div class="opt-grid">
+            <strong>Текст</strong>
+            <strong>Значение</strong>
+            <strong>Порядок</strong>
+            {% for opt in question.options %}
+                <input type="text" name="opt_{{ opt.id }}_text" value="{{ opt.text }}" />
+                <input type="text" name="opt_{{ opt.id }}_value" value="{{ opt.value }}" />
+                <input type="number" name="opt_{{ opt.id }}_order" value="{{ opt.order }}" />
+            {% endfor %}
+        </div>
+
+        <h4>Добавить вариант</h4>
+        <div class="opt-grid">
+            <input type="text" name="new_opt_text" placeholder="Новый текст" />
+            <input type="text" name="new_opt_value" placeholder="Значение" />
+            <input type="number" name="new_opt_order" placeholder="Порядок" />
+        </div>
+
+        <div style="margin-top: 16px;">
+            <button type="submit" class="btn">Сохранить</button>
+            <a class="btn btn-secondary" href="/admin/questions?token={{ token }}">Назад</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

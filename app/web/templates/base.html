@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title or "Admin" }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 32px; background: #f7f7f8; color: #1f2937; }
+        a { color: #1d4ed8; text-decoration: none; }
+        header { margin-bottom: 24px; }
+        nav a { margin-right: 12px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+        th { background: #f3f4f6; font-weight: 600; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .row { display: flex; gap: 16px; }
+        .row > div { flex: 1; }
+        label { display: block; margin-top: 10px; font-weight: 600; }
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 8px; margin-top: 6px; border: 1px solid #d1d5db; border-radius: 6px; }
+        textarea { min-height: 90px; }
+        .muted { color: #6b7280; font-size: 13px; }
+        .btn { display: inline-block; padding: 8px 14px; background: #111827; color: #fff; border-radius: 6px; border: none; cursor: pointer; }
+        .btn-secondary { background: #6b7280; }
+        .inline { display: inline-block; margin-right: 10px; }
+        .opt-grid { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 8px; }
+    </style>
+</head>
+<body>
+<header>
+    <nav>
+        <a href="/admin/questions?token={{ token }}">Вопросы</a>
+        <a href="/admin/users?token={{ token }}">Пользователи</a>
+    </nav>
+</header>
+
+{% block content %}{% endblock %}
+</body>
+</html>
