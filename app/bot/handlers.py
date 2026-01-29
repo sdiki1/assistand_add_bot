@@ -39,6 +39,7 @@ from app.services.survey import (
     toggle_option_answer,
     update_user_phone,
 )
+from app.config import BASE_DIR
 
 
 def register_handlers(dp: Dispatcher) -> None:
@@ -66,7 +67,13 @@ async def start_command(message: Message) -> None:
         response = await start_response_flow(session, user.id, survey.id, questions[0].id)
 
     await message.answer(
-        "Привет! Это анкета ассистента. Ответьте на вопросы — так мы лучше поймём ваш опыт.",
+        "Если Вы смотрели фильм \"Дьявол носит Прада\" и помните успевающую во всем ассистенку?  "
+        "Приятно познакомиться - это Я!\n\n"
+        "Занимая разные роли в компании, я узнала, как «крутится каждый винтик» их организационного процесса "
+        "и успела накопить обширный опыт fashion-retail, продажах, IT и управлении процессами.\n\n"
+        "7 лет опыта, и теперь я хочу помочь тебе занять место той самой right hand 👠\n"
+        "Заполни небольшую анкету кандидата — так я смогу лучше понять твой опыт, сильные стороны и то, "
+        "какой формат работы тебе подойдёт больше всего.",
         reply_markup=ReplyKeyboardRemove(),
     )
     async with AsyncSessionLocal() as session:
@@ -268,6 +275,8 @@ async def handle_messages(message: Message) -> None:
 async def send_question(
     bot: Bot, chat_id: int, question: Question, session: AsyncSession, response_id: int | None
 ) -> Message | None:
+    if question.code == "consent":
+        await _send_consent_files(bot, chat_id)
     text = format_question_text(question)
     has_image = _has_question_image(question)
 
@@ -439,6 +448,20 @@ async def _edit_last_question_message(
 
 def _has_question_image(question: Question) -> bool:
     return bool(question.image_path and os.path.exists(question.image_path))
+
+
+async def _send_consent_files(bot: Bot, chat_id: int) -> None:
+    files = [
+        BASE_DIR / "ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ.pdf",
+        BASE_DIR / "СОГЛАСИЕ_НА_ОБРАБОТКУ_ПЕРСОНАЛЬНЫХ_ДАННЫХ.pdf",
+    ]
+    for path in files:
+        if not path.exists():
+            continue
+        try:
+            await bot.send_document(chat_id, FSInputFile(path))
+        except Exception:
+            continue
 
 
 async def _build_summary(session: AsyncSession, response_id: int) -> str:
