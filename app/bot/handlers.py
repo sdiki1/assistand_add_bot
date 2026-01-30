@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, FSInputFile, Message, ReplyKeyboardRemove
 from html import escape as html_escape
+from jinja2 import pass_environment
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.keyboards import (
@@ -65,17 +66,24 @@ async def start_command(message: Message) -> None:
             await message.answer("Анкета пока не настроена.")
             return
         response = await start_response_flow(session, user.id, survey.id, questions[0].id)
-
-    await message.answer(
-        "Если Вы смотрели фильм \"Дьявол носит Прада\" и помните успевающую во всем ассистенку?  "
+    text = ("Если Вы смотрели фильм <b>\"Дьявол носит Прада\"</b> и помните успевающую во всем ассистенку?  "
         "Приятно познакомиться - это Я!\n\n"
-        "Занимая разные роли в компании, я узнала, как «крутится каждый винтик» их организационного процесса "
-        "и успела накопить обширный опыт fashion-retail, продажах, IT и управлении процессами.\n\n"
-        "7 лет опыта, и теперь я хочу помочь тебе занять место той самой right hand 👠\n"
+        "Занимая разные роли в компании, я узнала, как <b>«крутится каждый винтик»</b> их организационного процесса "
+        "и успела накопить обширный опыт <b>fashion-retail</b>, <b>продажах</b>, <b>IT</b> и <b>управлении процессами</b>.\n\n"
+        "<b>7</b> лет <b>опыта</b>, и теперь я хочу помочь тебе занять место той самой <b>right hand</b> 👠\n"
         "Заполни небольшую анкету кандидата — так я смогу лучше понять твой опыт, сильные стороны и то, "
-        "какой формат работы тебе подойдёт больше всего.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+        "какой формат работы тебе подойдёт больше всего.")
+    sent = await message.bot.send_photo(
+            message.from_user.id,
+            FSInputFile(BASE_DIR / "bot_intro.jpg"),
+            caption=text,
+            reply_markup=ReplyKeyboardRemove(),
+            parse_mode="HTML",
+        )
+    # await message.answer(
+        
+    #     reply_markup=ReplyKeyboardRemove(),
+    # )
     async with AsyncSessionLocal() as session:
         question = await get_question(session, response.current_question_id)
         await send_question(message.bot, message.chat.id, question, session, response.id)
@@ -380,7 +388,7 @@ async def finish_response(message: Message, session: AsyncSession, response_id: 
 
 
 def _render_answered_question(question: Question, answer_text: str) -> str:
-    return f"{question.text}\n\n{answer_text}"
+    return f"<b>{question.text}</b>\n\n{answer_text}"
 
 
 def _format_option_values(question: Question, option_ids: list[int]) -> str:
@@ -404,11 +412,11 @@ async def _edit_callback_message(callback: CallbackQuery, question: Question, an
     try:
         if callback.message.photo:
             await callback.message.edit_caption(
-                caption=_render_answered_question(question, answer_text), reply_markup=None
+                caption=_render_answered_question(question, answer_text), reply_markup=None, parse_mode="HTML"
             )
         else:
             await callback.message.edit_text(
-                _render_answered_question(question, answer_text), reply_markup=None
+                _render_answered_question(question, answer_text), reply_markup=None, parse_mode="HTML"
             )
     except Exception:
         return
@@ -434,6 +442,7 @@ async def _edit_last_question_message(
                 chat_id=chat_id,
                 message_id=message_id,
                 reply_markup=reply_markup,
+                parse_mode="HTML",
             )
         else:
             await bot.edit_message_text(
@@ -441,6 +450,7 @@ async def _edit_last_question_message(
                 chat_id=chat_id,
                 message_id=message_id,
                 reply_markup=reply_markup,
+                parse_mode="HTML",
             )
     except Exception:
         return
