@@ -131,22 +131,3 @@ class UploadedFile(Base):
     public_url: Mapped[str] = mapped_column(Text)
     file_type: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class Payment(Base):
-    __tablename__ = "payments"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    response_id: Mapped[Optional[int]] = mapped_column(ForeignKey("responses.id"), nullable=True, index=True)
-    status: Mapped[str] = mapped_column(String(32), default="new")
-    yk_payment_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
-    confirmation_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    amount: Mapped[str] = mapped_column(String(32))
-    currency: Mapped[str] = mapped_column(String(8), default="RUB")
-    description: Mapped[str] = mapped_column(String(255))
-    customer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    idempotence_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

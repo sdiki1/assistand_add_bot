@@ -24,17 +24,5 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
 
-    # YooKassa
-    YOOKASSA_SHOP_ID: str = ""
-    YOOKASSA_SECRET_KEY: str = ""
-    YOOKASSA_RETURN_URL: str = ""
-    YOOKASSA_AMOUNT: str = ""
-    YOOKASSA_CURRENCY: str = "RUB"
-    YOOKASSA_DESCRIPTION: str = "Оплата анкеты"
-    YOOKASSA_VAT_CODE: int = 1
-    YOOKASSA_PAYMENT_SUBJECT: str = "service"
-    YOOKASSA_PAYMENT_MODE: str = "full_payment"
-    YOOKASSA_TAX_SYSTEM_CODE: int = 6
-
 
 settings = Settings()

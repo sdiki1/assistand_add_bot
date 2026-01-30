@@ -39,21 +39,6 @@ def build_contact_keyboard() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
 
-def build_pay_start_keyboard(response_id: int) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Оплатить", callback_data=f"pay:start:{response_id}")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
-def build_pay_link_keyboard(response_id: int, confirmation_url: str) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Перейти к оплате", url=confirmation_url)
-    builder.button(text="Проверить оплату", callback_data=f"pay:check:{response_id}")
-    builder.adjust(1)
-    return builder.as_markup()
-
-
 def format_question_text(question: Question) -> str:
     if question.help_text:
         return f"<b>{question.text}</b>\n\n{question.help_text}"
