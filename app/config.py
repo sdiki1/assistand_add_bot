@@ -20,6 +20,12 @@ class Settings(BaseSettings):
 
     DB_URL: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'app.db').as_posix()}"
 
+    # Google Sheets (optional)
+    GOOGLE_SHEET_ID: str = ""
+    GOOGLE_SHEET_TAB: str = "Sheet1"
+    GOOGLE_SHEETS_CREDENTIALS_PATH: str = ""
+    GOOGLE_SHEETS_CREDENTIALS_JSON: str = ""
+
     # Optional misc
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000

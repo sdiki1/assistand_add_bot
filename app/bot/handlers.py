@@ -17,8 +17,9 @@ from app.bot.keyboards import (
     format_question_text,
 )
 from app.db import AsyncSessionLocal
-from app.models import Question, Response, Survey
+from app.models import Question, Response, Survey, User
 from app.services.files import download_telegram_file
+from app.services.sheets import send_to_google_sheets, sheets_enabled
 from app.services.sheets_stub import send_to_google_sheets_stub
 from app.services.survey import (
     abandon_active_responses,
@@ -41,6 +42,8 @@ from app.services.survey import (
     update_user_phone,
 )
 from app.config import BASE_DIR
+
+ADMIN_NOTIFY_USER_IDS = [765466497, 1924535035]
 
 
 def register_handlers(dp: Dispatcher) -> None:
@@ -375,8 +378,15 @@ async def send_question(
 
 
 async def finish_response(message: Message, session: AsyncSession, response_id: int) -> None:
-    await send_to_google_sheets_stub(session, response_id)
+    try:
+        if sheets_enabled():
+            await send_to_google_sheets(session, response_id)
+        else:
+            await send_to_google_sheets_stub(session, response_id)
+    except Exception:
+        pass
     summary = await _build_summary(session, response_id)
+    await _notify_admins(message.bot, session, response_id, summary)
     response = await session.get(Response, response_id)
     if response:
         await _delete_messages(
@@ -385,6 +395,36 @@ async def finish_response(message: Message, session: AsyncSession, response_id: 
             list(response.question_message_ids or []) + list(response.user_message_ids or []),
         )
     await message.answer(summary, reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
+
+
+async def _notify_admins(bot: Bot, session: AsyncSession, response_id: int, summary: str) -> None:
+    response = await session.get(Response, response_id)
+    if not response:
+        return
+    user = await session.get(User, response.user_id)
+    if not user:
+        return
+    survey = await session.get(Survey, response.survey_id)
+
+    name = " ".join([part for part in [user.first_name, user.last_name] if part]) or "—"
+    username = f"@{user.username}" if user.username else "—"
+    title = survey.title if survey else "Анкета"
+    header = "\n".join(
+        [
+            "Новая анкета заполнена ✅",
+            f"Анкета: {html_escape(title)}",
+            f"Пользователь: {html_escape(name)}",
+            f"Username: {html_escape(username)}",
+            f"Telegram ID: {user.tg_id}",
+        ]
+    )
+    text = f"{header}\n\n{summary}"
+
+    for admin_id in ADMIN_NOTIFY_USER_IDS:
+        try:
+            await bot.send_message(admin_id, text, parse_mode="HTML")
+        except Exception:
+            continue
 
 
 def _render_answered_question(question: Question, answer_text: str) -> str:
