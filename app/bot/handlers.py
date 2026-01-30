@@ -487,6 +487,8 @@ async def _build_summary(session: AsyncSession, response_id: int) -> str:
     title_raw = f"Сводка анкеты: {survey.title}" if survey else "Сводка анкеты"
     lines = [html_escape(title_raw)]
     for question in questions:
+        if question.code == 0:
+            continue
         answer = answers_map.get(question.id)
         value = await _format_answer_value(session, question, answer, options_map)
         q_text = html_escape(question.text)
