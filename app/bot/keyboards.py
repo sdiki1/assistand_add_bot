@@ -40,6 +40,10 @@ def build_contact_keyboard() -> ReplyKeyboardMarkup:
 
 
 def format_question_text(question: Question) -> str:
+    if question.settings and question.settings.get("raw_html"):
+        if question.help_text:
+            return f"{question.text}\n\n{question.help_text}"
+        return question.text
     if question.help_text:
         return f"<b>{question.text}</b>\n\n{question.help_text}"
     return f"<b>{question.text}</b>"

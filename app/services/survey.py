@@ -9,14 +9,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Answer, Option, Question, Response, Survey, UploadedFile, User
 
 
-async def get_active_survey(session: AsyncSession) -> Survey:
-    result = await session.execute(
-        select(Survey).where(Survey.is_active.is_(True)).order_by(Survey.id.desc())
-    )
+async def get_active_survey(session: AsyncSession, code: str | None = None) -> Survey:
+    stmt = select(Survey).where(Survey.is_active.is_(True))
+    if code:
+        stmt = stmt.where(Survey.code == code)
+    result = await session.execute(stmt.order_by(Survey.id.desc()))
     survey = result.scalars().first()
     if not survey:
         raise RuntimeError("No active survey found")
     return survey
+
+
+async def get_survey_by_code(session: AsyncSession, code: str) -> Survey:
+    result = await session.execute(select(Survey).where(Survey.code == code))
+    survey = result.scalars().first()
+    if not survey:
+        raise RuntimeError("Survey not found")
+    return survey
+
+
+async def list_surveys(session: AsyncSession) -> list[Survey]:
+    result = await session.execute(select(Survey).order_by(Survey.id.desc()))
+    return list(result.scalars().all())
 
 
 async def get_questions(session: AsyncSession, survey_id: int) -> list[Question]:

@@ -3,7 +3,7 @@
 <div class="card">
     <h2>Редактирование вопроса</h2>
     <p class="muted">ID {{ question.id }}</p>
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" action="/admin/questions/{{ question.id }}?token={{ token }}{% if survey_code %}&survey_code={{ survey_code }}{% endif %}">
         <label>Текст вопроса</label>
         <textarea name="text">{{ question.text }}</textarea>
 
@@ -69,7 +69,7 @@
 
         <div style="margin-top: 16px;">
             <button type="submit" class="btn">Сохранить</button>
-            <a class="btn btn-secondary" href="/admin/questions?token={{ token }}">Назад</a>
+            <a class="btn btn-secondary" href="/admin/questions?token={{ token }}{% if survey_code %}&survey_code={{ survey_code }}{% endif %}">Назад</a>
         </div>
     </form>
 </div>

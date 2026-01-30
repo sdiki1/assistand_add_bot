@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import BASE_DIR, QUESTION_IMAGES_DIR, settings
 from app.db import AsyncSessionLocal
 from app.models import Option, Question
-from app.services.survey import get_active_survey, list_users
+from app.services.survey import get_active_survey, get_survey_by_code, list_surveys, list_users
 
 router = APIRouter(prefix="/admin")
 
@@ -35,17 +35,36 @@ def require_admin(request: Request) -> str:
 
 @router.get("/")
 async def admin_index(request: Request, token: str = Depends(require_admin)):
-    return RedirectResponse(url=f"/admin/questions?token={token}")
+    return RedirectResponse(url=f"/admin/surveys?token={token}")
+
+
+@router.get("/surveys")
+async def list_surveys_page(request: Request, token: str = Depends(require_admin)):
+    async with AsyncSessionLocal() as session:
+        surveys = await list_surveys(session)
+    return templates.TemplateResponse(
+        "surveys.html",
+        {
+            "request": request,
+            "surveys": surveys,
+            "token": token,
+        },
+    )
 
 
 @router.get("/questions")
 async def list_questions(request: Request, token: str = Depends(require_admin)):
+    survey_code = request.query_params.get("survey_code")
     async with AsyncSessionLocal() as session:
-        survey = await get_active_survey(session)
+        if survey_code:
+            survey = await get_survey_by_code(session, survey_code)
+        else:
+            survey = await get_active_survey(session)
         result = await session.execute(
             select(Question).where(Question.survey_id == survey.id).order_by(Question.order.asc())
         )
         questions = list(result.scalars().all())
+        surveys = await list_surveys(session)
     return templates.TemplateResponse(
         "questions.html",
         {
@@ -53,12 +72,15 @@ async def list_questions(request: Request, token: str = Depends(require_admin)):
             "questions": questions,
             "token": token,
             "survey": survey,
+            "surveys": surveys,
+            "survey_code": survey_code or survey.code,
         },
     )
 
 
 @router.get("/questions/{question_id}")
 async def edit_question(request: Request, question_id: int, token: str = Depends(require_admin)):
+    survey_code = request.query_params.get("survey_code")
     async with AsyncSessionLocal() as session:
         question = await session.get(Question, question_id)
         if not question:
@@ -70,6 +92,7 @@ async def edit_question(request: Request, question_id: int, token: str = Depends
             "request": request,
             "question": question,
             "token": token,
+            "survey_code": survey_code,
         },
     )
 
@@ -77,6 +100,7 @@ async def edit_question(request: Request, question_id: int, token: str = Depends
 @router.post("/questions/{question_id}")
 async def update_question(request: Request, question_id: int, token: str = Depends(require_admin)):
     form = await request.form()
+    survey_code = request.query_params.get("survey_code")
 
     async with AsyncSessionLocal() as session:
         question = await session.get(Question, question_id)
@@ -136,7 +160,10 @@ async def update_question(request: Request, question_id: int, token: str = Depen
 
         await session.commit()
 
-    return RedirectResponse(url=f"/admin/questions/{question_id}?token={token}", status_code=303)
+    redirect_url = f"/admin/questions/{question_id}?token={token}"
+    if survey_code:
+        redirect_url = f"{redirect_url}&survey_code={survey_code}"
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.get("/question-image/{question_id}")

@@ -14,11 +14,19 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     BOT_TOKEN: str
+    ASSISTANT_TEST_BOT_TOKEN: str = ""
     WEBHOOK_URL: str = ""
     FILES_BASE_URL: str
     ADMIN_TOKEN: str = ""
 
     DB_URL: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'app.db').as_posix()}"
+
+    # Survey codes per bot
+    ASSISTANT_MAIN_SURVEY_CODE: str = "assistant_v1"
+    ASSISTANT_TEST_SURVEY_CODE: str = "assistant_test_v1"
+
+    # Assistant test PDFs
+    ASSISTANT_TEST_PDF_DIR: str = str(DATA_DIR / "assistant_test_pdfs")
 
     # Google Sheets (optional)
     GOOGLE_SHEET_ID: str = ""

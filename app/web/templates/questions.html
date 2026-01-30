@@ -3,6 +3,19 @@
 <div class="card">
     <h2>Вопросы анкеты: {{ survey.title }}</h2>
     <p class="muted">Редактируйте текст, типы и варианты ответа.</p>
+    {% if surveys %}
+        <p class="muted">
+            Анкеты:
+            {% for s in surveys %}
+                {% if s.code == survey_code %}
+                    <strong>{{ s.title }}</strong>
+                {% else %}
+                    <a href="/admin/questions?token={{ token }}&survey_code={{ s.code }}">{{ s.title }}</a>
+                {% endif %}
+                {% if not loop.last %} · {% endif %}
+            {% endfor %}
+        </p>
+    {% endif %}
     <table>
         <thead>
             <tr>
@@ -20,7 +33,11 @@
                 <td>{{ q.code }}</td>
                 <td>{{ q.type }}</td>
                 <td>{{ q.text }}</td>
-                <td><a href="/admin/questions/{{ q.id }}?token={{ token }}">Редактировать</a></td>
+                <td>
+                    <a href="/admin/questions/{{ q.id }}?token={{ token }}&survey_code={{ survey_code }}">
+                        Редактировать
+                    </a>
+                </td>
             </tr>
         {% endfor %}
         </tbody>

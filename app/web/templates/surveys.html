@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Анкеты</h2>
+    <p class="muted">Выберите анкету для редактирования вопросов.</p>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Код</th>
+                <th>Название</th>
+                <th>Активна</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for survey in surveys %}
+            <tr>
+                <td>{{ survey.id }}</td>
+                <td>{{ survey.code }}</td>
+                <td>{{ survey.title }}</td>
+                <td>{{ "Да" if survey.is_active else "Нет" }}</td>
+                <td>
+                    <a href="/admin/questions?token={{ token }}&survey_code={{ survey.code }}">Вопросы</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

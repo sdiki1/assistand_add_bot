@@ -41,7 +41,7 @@ from app.services.survey import (
     toggle_option_answer,
     update_user_phone,
 )
-from app.config import BASE_DIR
+from app.config import BASE_DIR, settings
 
 ADMIN_NOTIFY_USER_IDS = [765466497, 1924535035]
 
@@ -55,7 +55,7 @@ def register_handlers(dp: Dispatcher) -> None:
 
 async def start_command(message: Message) -> None:
     async with AsyncSessionLocal() as session:
-        survey = await get_active_survey(session)
+        survey = await get_active_survey(session, settings.ASSISTANT_MAIN_SURVEY_CODE)
         user = await get_or_create_user(
             session,
             message.from_user.id,
@@ -92,7 +92,7 @@ async def start_command(message: Message) -> None:
 
 async def restart_command(message: Message) -> None:
     async with AsyncSessionLocal() as session:
-        survey = await get_active_survey(session)
+        survey = await get_active_survey(session, settings.ASSISTANT_MAIN_SURVEY_CODE)
         user = await get_or_create_user(
             session,
             message.from_user.id,
@@ -129,7 +129,7 @@ async def handle_callbacks(callback: CallbackQuery) -> None:
         return
 
     async with AsyncSessionLocal() as session:
-        survey = await get_active_survey(session)
+        survey = await get_active_survey(session, settings.ASSISTANT_MAIN_SURVEY_CODE)
         user = await get_or_create_user(
             session,
             callback.from_user.id,
@@ -201,7 +201,7 @@ async def handle_messages(message: Message) -> None:
         return
 
     async with AsyncSessionLocal() as session:
-        survey = await get_active_survey(session)
+        survey = await get_active_survey(session, settings.ASSISTANT_MAIN_SURVEY_CODE)
         user = await get_or_create_user(
             session,
             message.from_user.id,

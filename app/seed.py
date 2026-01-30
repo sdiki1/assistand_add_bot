@@ -1,32 +1,74 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import Option, Question, Response, Survey
 
 
-async def seed_if_empty(session: AsyncSession) -> None:
-    survey = await session.scalar(select(Survey).limit(1))
-    if survey:
-        responses_count = await session.scalar(
-            select(func.count(Response.id)).where(Response.survey_id == survey.id)
-        )
-        if responses_count and responses_count > 0:
-            return
-        question_ids = (
-            await session.scalars(select(Question.id).where(Question.survey_id == survey.id))
-        ).all()
-        if question_ids:
-            await session.execute(delete(Option).where(Option.question_id.in_(question_ids)))
-            await session.execute(delete(Question).where(Question.id.in_(question_ids)))
-            await session.commit()
-    else:
-        survey = Survey(code="assistant_v1", title="Анкета ассистента")
+def _build_option_payload(opt: object, default_order: int) -> dict[str, object]:
+    if isinstance(opt, dict):
+        text = str(opt.get("text", "")).strip()
+        value = str(opt.get("value", text)).strip()
+        order = int(opt.get("order", default_order))
+        return {"text": text, "value": value, "order": order}
+    text = str(opt)
+    return {"text": text, "value": text, "order": default_order}
+
+
+async def _seed_survey(
+    session: AsyncSession,
+    *,
+    code: str,
+    title: str,
+    questions_data: list[dict[str, object]],
+) -> None:
+    survey = await session.scalar(select(Survey).where(Survey.code == code))
+    if not survey:
+        survey = Survey(code=code, title=title, is_active=True)
         session.add(survey)
         await session.flush()
 
-    questions_data = [
+    responses_count = await session.scalar(
+        select(func.count(Response.id)).where(Response.survey_id == survey.id)
+    )
+    if responses_count and responses_count > 0:
+        return
+
+    question_ids = (
+        await session.scalars(select(Question.id).where(Question.survey_id == survey.id))
+    ).all()
+    if question_ids:
+        await session.execute(delete(Option).where(Option.question_id.in_(question_ids)))
+        await session.execute(delete(Question).where(Question.id.in_(question_ids)))
+        await session.commit()
+
+    for item in questions_data:
+        options = item.pop("options", [])
+        question = Question(survey_id=survey.id, **item)
+        if question.type == "multi_choice":
+            question.allow_multiple = True
+        session.add(question)
+        await session.flush()
+        for idx, opt in enumerate(options, start=1):
+            payload = _build_option_payload(opt, idx)
+            session.add(
+                Option(
+                    question_id=question.id,
+                    text=payload["text"],
+                    value=payload["value"],
+                    order=payload["order"],
+                )
+            )
+
+    await session.commit()
+
+
+async def seed_if_empty(session: AsyncSession) -> None:
+    main_questions = [
         {
             "code": "consent",
             "text": (
@@ -176,16 +218,210 @@ async def seed_if_empty(session: AsyncSession) -> None:
         },
     ]
 
-    questions = []
-    for item in questions_data:
-        options = item.pop("options", [])
-        question = Question(survey_id=survey.id, **item)
-        if question.type == "multi_choice":
-            question.allow_multiple = True
-        session.add(question)
-        await session.flush()
-        questions.append(question)
-        for idx, opt in enumerate(options, start=1):
-            session.add(Option(question_id=question.id, text=opt, value=opt, order=idx))
+    await _seed_survey(
+        session,
+        code=settings.ASSISTANT_MAIN_SURVEY_CODE,
+        title="Анкета ассистента",
+        questions_data=main_questions,
+    )
 
-    await session.commit()
+    def _test_question(code: str, text: str, order: int, options: list[dict[str, str]], image_folder: str) -> dict[str, object]:
+        return {
+            "code": code,
+            "text": text,
+            "type": "single_choice",
+            "order": order,
+            "settings": {
+                "raw_html": True,
+                "image_dir": str(Path("assistant_images_questions") / image_folder),
+            },
+            "options": options,
+        }
+
+    test_questions = [
+        _test_question(
+            "q1",
+            "\n".join(
+                [
+                    "ВОПРОСЫ ДЛЯ БОТА",
+                    "",
+                    "ну что, let’s start с самого простого💔 первый вопрос:",
+                    "<b>Когда ты представляешь идеальный рабочий день, это скорее:</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Чёткий график 🖥",
+                    "B️⃣ Быть на связи 🫡",
+                    "C️⃣ Много задач 📚",
+                ]
+            ),
+            1,
+            [
+                {"text": "A️⃣ Чёткий график 🖥", "value": "A"},
+                {"text": "B️⃣ Быть на связи 🫡", "value": "B"},
+                {"text": "C️⃣ Много задач 📚", "value": "C"},
+            ],
+            "question1",
+        ),
+        _test_question(
+            "q2",
+            "\n".join(
+                [
+                    "—",
+                    "☁️неопределённость... или второй вопрос:",
+                    "<b>Если задача поставлена не до конца понятно, а уточнить сейчас нельзя, ты:</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Инструкции📄",
+                    "B️⃣ Ситуация 🏓",
+                    "C️⃣ Решение 💡",
+                ]
+            ),
+            2,
+            [
+                {"text": "A️⃣ Инструкции📄", "value": "A"},
+                {"text": "B️⃣ Ситуация 🏓", "value": "B"},
+                {"text": "C️⃣ Решение 💡", "value": "C"},
+            ],
+            "question2",
+        ),
+        _test_question(
+            "q3",
+            "\n".join(
+                [
+                    "—",
+                    "🗣формат общения. третий вопрос:",
+                    "<b>Какой формат взаимодействия с руководителем тебе ближе?</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Дистанция 👥",
+                    "B️⃣ Постоянная связь 🫂",
+                    "C️⃣ Рабочее партнёрство 💼",
+                ]
+            ),
+            3,
+            [
+                {"text": "A️⃣ Дистанция 👥", "value": "A"},
+                {"text": "B️⃣ Постоянная связь 🫂", "value": "B"},
+                {"text": "C️⃣ Рабочее партнёрство 💼", "value": "C"},
+            ],
+            "question3",
+        ),
+        _test_question(
+            "q4",
+            "\n".join(
+                [
+                    "—",
+                    "🤯хаос и стресс. четвертый вопрос:",
+                    "<b>Когда вокруг много задач и всё срочно, ты:</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Теряешься 😱",
+                    "B️⃣ Фокусируешься 🧠",
+                    "C️⃣ Приоритеты ✍️",
+                ]
+            ),
+            4,
+            [
+                {"text": "A️⃣ Теряешься 😱", "value": "A"},
+                {"text": "B️⃣ Фокусируешься 🧠", "value": "B"},
+                {"text": "C️⃣ Приоритеты ✍️", "value": "C"},
+            ],
+            "question4",
+        ),
+        _test_question(
+            "q5",
+            "\n".join(
+                [
+                    "—",
+                    "Тип задач 🤳пятый вопрос:",
+                    "<b>Какие задачи тебе даются легче всего?</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Документы, списки, контроль, порядок 📑",
+                    "B️⃣ Организация, договорённости 📌",
+                    "C️⃣ Контроль процессов 👀",
+                ]
+            ),
+            5,
+            [
+                {"text": "A️⃣ Документы, списки, контроль, порядок 📑", "value": "A"},
+                {"text": "B️⃣ Организация, договорённости 📌", "value": "B"},
+                {"text": "C️⃣ Контроль процессов 👀", "value": "C"},
+            ],
+            "question5",
+        ),
+        _test_question(
+            "q6",
+            "\n".join(
+                [
+                    "—",
+                    "💪Мотивация. шестой вопрос:",
+                    "<b>Что больше всего мотивирует тебя в работе?</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Стабильность и понятность👁",
+                    "B️⃣ Чувство нужности 👫",
+                    "C️⃣ Влияние на результат и рост📈",
+                ]
+            ),
+            6,
+            [
+                {"text": "A️⃣ Стабильность и понятность👁", "value": "A"},
+                {"text": "B️⃣ Чувство нужности 👫", "value": "B"},
+                {"text": "C️⃣ Влияние на результат и рост📈", "value": "C"},
+            ],
+            "question6",
+        ),
+        _test_question(
+            "q7",
+            "\n".join(
+                [
+                    "—",
+                    "Ответственность 🤝седьмой вопрос:",
+                    "(осталось еще немного)",
+                    "<b>Если что-то пошло не так, ты скорее:</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Хочешь понять, где была ошибка в системе",
+                    "B️⃣ Переживаешь за человека и стараешься сгладить ситуацию",
+                    "C️⃣ Быстро ищешь решение и минимизируешь последствия",
+                ]
+            ),
+            7,
+            [
+                {"text": "A️⃣ Хочешь понять, где была ошибка в системе", "value": "A"},
+                {"text": "B️⃣ Переживаешь за человека и стараешься сгладить ситуацию", "value": "B"},
+                {"text": "C️⃣ Быстро ищешь решение и минимизируешь последствия", "value": "C"},
+            ],
+            "question7",
+        ),
+        _test_question(
+            "q8",
+            "\n".join(
+                [
+                    "—",
+                    "Про энергию 🌱 (ключевой) вопрос:",
+                    "<b>После рабочего дня ты чувствуешь себя лучше, если:</b>",
+                    "",
+                    "ВАРИАНТЫ ОТВЕТОВ:",
+                    "A️⃣ Всё сделано по плану и ничего не забыто🤔",
+                    "B️⃣ Ты была полезной и поддержала другого🥰",
+                    "C️⃣ Ты продвинула процесс и решила сложные задачи😰",
+                ]
+            ),
+            8,
+            [
+                {"text": "A️⃣ Всё сделано по плану и ничего не забыто🤔", "value": "A"},
+                {"text": "B️⃣ Ты была полезной и поддержала другого🥰", "value": "B"},
+                {"text": "C️⃣ Ты продвинула процесс и решила сложные задачи😰", "value": "C"},
+            ],
+            "question8",
+        ),
+    ]
+
+    await _seed_survey(
+        session,
+        code=settings.ASSISTANT_TEST_SURVEY_CODE,
+        title="Тест ассистента",
+        questions_data=test_questions,
+    )
