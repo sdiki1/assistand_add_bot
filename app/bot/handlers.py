@@ -502,7 +502,6 @@ def _has_question_image(question: Question) -> bool:
 
 async def _send_consent_files(bot: Bot, chat_id: int) -> None:
     files = [
-        BASE_DIR / "ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ.pdf",
         BASE_DIR / "СОГЛАСИЕ_НА_ОБРАБОТКУ_ПЕРСОНАЛЬНЫХ_ДАННЫХ.pdf",
     ]
     for path in files:
