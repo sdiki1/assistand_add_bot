@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from contextlib import suppress
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -50,6 +51,54 @@ async def list_surveys_page(request: Request, token: str = Depends(require_admin
             "token": token,
         },
     )
+
+
+@router.get("/assistant-test-files")
+async def assistant_test_files(request: Request, token: str = Depends(require_admin)):
+    base_dir = Path(settings.ASSISTANT_TEST_PDF_DIR)
+    files = {
+        "OFFICE": base_dir / "office_assistant.pdf",
+        "PERSONAL": base_dir / "personal_assistant.pdf",
+        "BUSINESS": base_dir / "business_assistant.pdf",
+        "MULTI": base_dir / "multi_assistant.pdf",
+    }
+    statuses = {key: path.exists() for key, path in files.items()}
+    return templates.TemplateResponse(
+        "assistant_test_files.html",
+        {
+            "request": request,
+            "token": token,
+            "files": files,
+            "statuses": statuses,
+        },
+    )
+
+
+@router.post("/assistant-test-files")
+async def assistant_test_files_upload(request: Request, token: str = Depends(require_admin)):
+    form = await request.form()
+    base_dir = Path(settings.ASSISTANT_TEST_PDF_DIR)
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    mapping = {
+        "office": "office_assistant.pdf",
+        "personal": "personal_assistant.pdf",
+        "business": "business_assistant.pdf",
+        "multi": "multi_assistant.pdf",
+    }
+
+    for field, filename in mapping.items():
+        upload = form.get(field)
+        if upload is None or not getattr(upload, "filename", None):
+            continue
+        if not str(upload.filename).lower().endswith(".pdf"):
+            continue
+        content = await upload.read()
+        target_path = base_dir / filename
+        with target_path.open("wb") as f:
+            f.write(content)
+
+    return RedirectResponse(url=f"/admin/assistant-test-files?token={token}", status_code=303)
 
 
 @router.get("/questions")

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>PDF для теста ассистента</h2>
+    <p class="muted">Загрузите финальные PDF файлы. Имена будут сохранены автоматически.</p>
+    <form method="post" enctype="multipart/form-data">
+        <div class="row">
+            <div>
+                <label>OFFICE (office_assistant.pdf)</label>
+                <input type="file" name="office" accept="application/pdf" />
+                <p class="muted">Статус: {{ "загружен" if statuses["OFFICE"] else "нет файла" }}</p>
+            </div>
+            <div>
+                <label>PERSONAL (personal_assistant.pdf)</label>
+                <input type="file" name="personal" accept="application/pdf" />
+                <p class="muted">Статус: {{ "загружен" if statuses["PERSONAL"] else "нет файла" }}</p>
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label>BUSINESS (business_assistant.pdf)</label>
+                <input type="file" name="business" accept="application/pdf" />
+                <p class="muted">Статус: {{ "загружен" if statuses["BUSINESS"] else "нет файла" }}</p>
+            </div>
+            <div>
+                <label>MULTI (multi_assistant.pdf)</label>
+                <input type="file" name="multi" accept="application/pdf" />
+                <p class="muted">Статус: {{ "загружен" if statuses["MULTI"] else "нет файла" }}</p>
+            </div>
+        </div>
+
+        <div style="margin-top: 16px;">
+            <button type="submit" class="btn">Сохранить</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
