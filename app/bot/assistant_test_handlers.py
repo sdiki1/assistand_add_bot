@@ -232,6 +232,10 @@ async def finish_response(message: Message, session: AsyncSession, response_id: 
     with suppress(Exception):
         await message.bot.delete_message(chat_id=loading.chat.id, message_id=loading.message_id)
 
+    response = await session.get(Response, response_id)
+    if response:
+        await _delete_messages(message.bot, message.chat.id, list(response.question_message_ids or []))
+
     text = RESULT_TEXTS.get(result_type, RESULT_TEXTS["MULTI"])
     await message.answer(text, parse_mode="HTML", reply_markup=ReplyKeyboardRemove())
     await _send_result_pdf(message.bot, message.chat.id, result_type)
@@ -333,6 +337,14 @@ async def _send_result_pdf(bot: Bot, chat_id: int, result_type: str) -> None:
         await bot.send_message(chat_id, "Файл пока не загружен. Напишите администратору.")
         return
     await bot.send_document(chat_id, FSInputFile(path))
+
+
+async def _delete_messages(bot: Bot, chat_id: int, message_ids: list[int]) -> None:
+    for message_id in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            continue
 
 
 def _parse_callback(data: str) -> tuple[int | None, str]:
